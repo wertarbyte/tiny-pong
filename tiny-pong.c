@@ -1,6 +1,7 @@
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
+#include <stdlib.h>
 
 #define output_low(port,pin) port &= ~(1<<pin)
 #define output_high(port,pin) port |= (1<<pin)
@@ -28,11 +29,11 @@ const uint8_t ROW_PIN[ROWS] = {
 	PB0
 };
 
-struct {
+volatile struct {
 	uint8_t xpos;
 	uint8_t ypos;
-	uint8_t dx;
-	uint8_t dy;
+	int8_t dx;
+	int8_t dy;
 } ball;
 
 struct paddle {
@@ -40,11 +41,12 @@ struct paddle {
 	uint8_t pos;
 	uint8_t width;
 	uint8_t score;
+	uint8_t target;
 };
 
-struct paddle player[2] = {
-	{ 0, 0, 2, 0 },
-	{ ROWS-1, 0, 2, 0 },
+volatile struct paddle player[2] = {
+	{ 0, 0, 2, 0, 0},
+	{ ROWS-1, 0, 2, 0, 0 },
 };
 
 void start(void) {
@@ -81,7 +83,7 @@ void init(void) {
 
 inline uint8_t pixel_on(uint8_t y, uint8_t x) {
 	for (uint8_t i=0; i<2; i++) {
-		struct paddle *p = &player[i];
+		volatile struct paddle *p = &player[i];
 		if ( x == p->row && y >= p->pos && y < (p->pos + p->width)) {
 			return 1;
 		}
@@ -110,11 +112,69 @@ SIGNAL(SIG_TIMER1_COMPA) {
 	draw_screen();
 }
 
+inline uint8_t ball_lost(void) {
+	return ((ball.xpos + ball.dx) < 0 || (ball.xpos + ball.dx) >= ROWS);
+}
+
+inline uint8_t bounce_ball(void) {
+	int8_t nx = ball.xpos + ball.dx;
+	int8_t ny = ball.ypos + ball.dy;
+	/* collision with upper/lower border */
+	if (ny < 0 || ny > COLS-1) {
+		ball.dy *= -1;
+		return 1;
+	}
+	/* collision with a paddle */
+	for (uint8_t i=0; i<2; i++) {
+		volatile struct paddle *p = &player[i];
+		if ( nx == p->row && ny >= p->pos && ny < (p->pos + p->width)) {
+			ball.dx *= -1;
+			/* did we hit the edge? */
+			if ( ball.ypos > (p->pos + p->width-1) || ball.ypos < p->pos ) {
+				ball.dy *= -1;
+			}
+			return 1;
+		}
+	}
+	return 0;
+}
+
+inline void move_ball(void) {
+	ball.xpos += ball.dx;
+	ball.ypos += ball.dy;
+}
+
+inline void move_paddles(void) {
+	for (uint8_t i=0; i<2; i++) {
+		volatile struct paddle *p = &player[i];
+		if (p->pos == p->target) {
+			/* select a new target */
+			p->target = random()%(COLS-p->width);
+		} else {
+			/* move towards our target */
+			if (p->target > p->pos) p->pos++;
+			else p->pos--;
+		}
+	}
+}
+
+inline void move(void) {
+	while (bounce_ball());
+	if (ball_lost()) {
+		_delay_ms(500);
+		start();
+	} else {
+		move_ball();
+	}
+	move_paddles();
+}
+
 int main(void) {
 	init();
 
 	while(1) {
 		_delay_ms(250);
+		move();
 	}
 	return 0;
 }
