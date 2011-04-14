@@ -19,13 +19,13 @@ const uint8_t COL_PIN[COLS] = {
 };
 
 const uint8_t ROW_PIN[ROWS] = {
-	PB0,
-	PB1,
-	PB2,
-	PB4,
-	PB3,
+	PB6,
 	PB5,
-	PB6
+	PB3,
+	PB4,
+	PB2,
+	PB1,
+	PB0
 };
 
 struct paddle {
