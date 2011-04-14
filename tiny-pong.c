@@ -53,9 +53,6 @@ volatile struct paddle player[2] = {
 };
 
 void start(void) {
-	for (uint8_t i=0; i<2; i++) {
-		player[i].pos = COLS/2;
-	}
 	int8_t direction = -1 * (serving*2 - 1);
 	ball.xpos = player[serving].row+direction;
 	ball.ypos = player[serving].pos;
