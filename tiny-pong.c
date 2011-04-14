@@ -28,6 +28,13 @@ const uint8_t ROW_PIN[ROWS] = {
 	PB0
 };
 
+struct {
+	uint8_t xpos;
+	uint8_t ypos;
+	uint8_t dx;
+	uint8_t dy;
+} ball;
+
 struct paddle {
 	const uint8_t row;
 	uint8_t pos;
@@ -40,6 +47,16 @@ struct paddle player[2] = {
 	{ ROWS-1, 0, 2, 0 },
 };
 
+void start(void) {
+	for (uint8_t i=0; i<2; i++) {
+		player[i].pos = COLS/2;
+	}
+	ball.xpos = player[0].row+1;
+	ball.ypos = player[0].pos;
+	ball.dx = 1;
+	ball.dy = 1;
+}
+
 void init(void) {
 	for (int i=0; i<COLS; i++) {
 		set_output(DDRD, COL_PIN[i]);
@@ -51,6 +68,8 @@ void init(void) {
 	}
 	set_input(DDRA, PA0);
 	set_input(DDRA, PA1);
+	start();
+
 	OCR1A = 2;
 	TCCR1A = 0x00;
 	// WGM1=4, prescale at 1024
@@ -66,6 +85,9 @@ inline uint8_t pixel_on(uint8_t y, uint8_t x) {
 		if ( x == p->row && y >= p->pos && y < (p->pos + p->width)) {
 			return 1;
 		}
+	}
+	if ( x == ball.xpos && y == ball.ypos ) {
+		return 1;
 	}
 	return 0;
 }
