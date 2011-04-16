@@ -14,6 +14,9 @@
 #define ROWS 7
 #define COLS 5
 
+#define MAX_X (ROWS-1)
+#define MAX_Y (COLS-1)
+
 const uint8_t COL_PIN[COLS] = {
 	PD0,
 	PD1,
@@ -122,6 +125,24 @@ SIGNAL(SIG_TIMER1_COMPA) {
 	draw_screen();
 }
 
+inline int8_t aim(uint8_t x) {
+	int8_t dist_x = x - ball.xpos;
+	// how many ticks until it intersects?
+	int8_t t = dist_x/ball.dx;
+	if (t<0) {
+		// the ball is moving away from the paddle
+		return -1;
+	}
+	// where will it be on the y scale then?
+	int8_t y = ball.ypos + (t * ball.dy);
+	// simulate the mirroring at the border
+	while (y < 0 || y > MAX_Y) {
+		if (y < 0) y = abs(y);
+		else if (y > MAX_Y) y = (MAX_Y-(y-MAX_Y));
+	}
+	return y;
+}
+
 inline uint8_t ball_lost(void) {
 	return ((ball.xpos + ball.dx) < 0 || (ball.xpos + ball.dx) >= ROWS);
 }
@@ -154,12 +175,30 @@ inline void move_ball(void) {
 	ball.ypos += ball.dy;
 }
 
+inline int8_t min(int8_t a, int8_t b) {
+	return a < b ? a : b;
+}
+inline int8_t max(int8_t a, int8_t b) {
+	return a > b ? a : b;
+}
+
+
 inline void move_paddles(void) {
 	for (uint8_t i=0; i<2; i++) {
 		volatile struct paddle *p = &player[i];
 		if (p->pos == p->target) {
 			/* select a new target */
-			p->target = random()%(COLS-p->width);
+			if (abs(ball.xpos - p->row) < ROWS-3) {
+				int8_t target = aim(p->row);
+				if (target >= 0) {
+					if (random()%2 == 0) {
+						target += ball.dy;
+					}
+					p->target = max(0, min(MAX_Y+1 - p->width, target));
+				}
+			} else {
+				p->target = random()%(COLS-p->width);
+			}
 		} else {
 			/* move towards our target */
 			if (p->target > p->pos) p->pos++;
