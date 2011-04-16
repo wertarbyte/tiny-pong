@@ -1,7 +1,10 @@
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
+#include <avr/eeprom.h>
 #include <stdlib.h>
+
+#define EEPROM_SEED_LOCATION 0
 
 #define output_low(port,pin) port &= ~(1<<pin)
 #define output_high(port,pin) port |= (1<<pin)
@@ -73,6 +76,10 @@ void init(void) {
 	}
 	set_input(DDRA, PA0);
 	set_input(DDRA, PA1);
+	// seed random number generator
+	uint8_t seed = eeprom_read_byte(EEPROM_SEED_LOCATION);
+	srandom(seed);
+	eeprom_update_byte(EEPROM_SEED_LOCATION, seed+1);
 	start();
 
 	OCR1A = 2;
