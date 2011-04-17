@@ -17,6 +17,9 @@
 #define MAX_X (ROWS-1)
 #define MAX_Y (COLS-1)
 
+#define BTN_L PA0
+#define BTN_R PA1
+
 const uint8_t COL_PIN[COLS] = {
 	PD0,
 	PD1,
@@ -48,14 +51,15 @@ struct paddle {
 	uint8_t width;
 	uint8_t score;
 	uint8_t target;
+	uint8_t ai;
 };
 
 
 uint8_t serving = 0;
 
 volatile struct paddle player[2] = {
-	{ 0, 0, 2, 0, 0},
-	{ ROWS-1, 0, 2, 0, 0 },
+	{ 0, 0, 2, 0, 0, 1},
+	{ ROWS-1, 0, 2, 0, 0, 1},
 };
 
 void start(void) {
@@ -68,7 +72,7 @@ void start(void) {
 	serving = (serving+1)%2;
 }
 
-void init(void) {
+inline void init(void) {
 	for (int i=0; i<COLS; i++) {
 		set_output(DDRD, COL_PIN[i]);
 		output_high(PORTD, COL_PIN[i]);
@@ -77,8 +81,8 @@ void init(void) {
 		set_output(DDRB, ROW_PIN[i]);
 		output_low(PORTB, ROW_PIN[i]);
 	}
-	set_input(DDRA, PA0);
-	set_input(DDRA, PA1);
+	set_input(DDRA, BTN_L);
+	set_input(DDRA, BTN_R);
 	// seed random number generator
 	uint8_t seed = eeprom_read_byte(EEPROM_SEED_LOCATION);
 	srandom(seed);
@@ -186,9 +190,20 @@ inline int8_t max(int8_t a, int8_t b) {
 inline void move_paddles(void) {
 	for (uint8_t i=0; i<2; i++) {
 		volatile struct paddle *p = &player[i];
+		if (!p->ai) {
+			// manual movement
+			if (PINA & (1<<BTN_L)) {
+				p->pos = max(0, min(MAX_Y+1 - p->width, p->pos-1));
+			} else if (PINA & (1<<BTN_R)) {
+				p->pos = max(0, min(MAX_Y+1 - p->width, p->pos+1));
+			}
+
+			continue;
+		}
 		if (p->pos == p->target) {
 			/* select a new target */
-			if (abs(ball.xpos - p->row) < ROWS-3) {
+			int8_t dist = abs(ball.xpos - p->row);
+			if (dist < MAX_X-3) {
 				int8_t target = aim(p->row);
 				if (target >= 0) {
 					if (random()%2 == 0) {
@@ -196,7 +211,7 @@ inline void move_paddles(void) {
 					}
 					p->target = max(0, min(MAX_Y+1 - p->width, target));
 				}
-			} else {
+			} else if(dist > MAX_X-2) {
 				p->target = random()%(COLS-p->width);
 			}
 		} else {
@@ -215,15 +230,31 @@ inline void move(void) {
 	} else {
 		move_ball();
 	}
-	move_paddles();
 }
 
 int main(void) {
 	init();
 
+	uint8_t tick = 0;
 	while(1) {
-		_delay_ms(250);
-		move();
+		// see if someone wants to take over a player
+		if (player[0].ai && player[1].ai) {
+			// manual movement
+			if (PINA & (1<<BTN_R)) {
+				player[0].ai = 0;
+				player[1].ai = 1;
+			} else if (PINA & (1<<BTN_L)) {
+				player[0].ai = 1;
+				player[1].ai = 0;
+			}
+		}
+		_delay_ms(50);
+		move_paddles();
+		if (tick >= 5) {
+			move();
+			tick = 0;
+		}
+		tick++;
 	}
 	return 0;
 }
