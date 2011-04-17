@@ -20,7 +20,7 @@
 #define BTN_L PA0
 #define BTN_R PA1
 
-const uint8_t COL_PIN[COLS] = {
+const static uint8_t COL_PIN[COLS] = {
 	PD0,
 	PD1,
 	PD2,
@@ -28,7 +28,7 @@ const uint8_t COL_PIN[COLS] = {
 	PD4,
 };
 
-const uint8_t ROW_PIN[ROWS] = {
+const static uint8_t ROW_PIN[ROWS] = {
 	PB6,
 	PB5,
 	PB3,
@@ -38,14 +38,14 @@ const uint8_t ROW_PIN[ROWS] = {
 	PB0
 };
 
-volatile struct {
+static volatile struct {
 	uint8_t xpos;
 	uint8_t ypos;
 	int8_t dx;
 	int8_t dy;
 } ball;
 
-struct paddle {
+static struct paddle {
 	const uint8_t row;
 	uint8_t pos;
 	uint8_t width;
@@ -55,14 +55,14 @@ struct paddle {
 };
 
 
-uint8_t serving = 0;
+static uint8_t serving = 0;
 
-volatile struct paddle player[2] = {
+static volatile struct paddle player[2] = {
 	{ 0, 0, 2, 0, 0, 1},
 	{ ROWS-1, 0, 2, 0, 0, 1},
 };
 
-void start(void) {
+static void start(void) {
 	int8_t direction = -1 * (serving*2 - 1);
 	ball.xpos = player[serving].row+direction;
 	ball.ypos = player[serving].pos;
@@ -72,7 +72,7 @@ void start(void) {
 	serving = (serving+1)%2;
 }
 
-inline void init(void) {
+static void init(void) {
 	for (int i=0; i<COLS; i++) {
 		set_output(DDRD, COL_PIN[i]);
 		output_high(PORTD, COL_PIN[i]);
@@ -98,7 +98,7 @@ inline void init(void) {
 	sei();
 }
 
-inline uint8_t pixel_on(uint8_t y, uint8_t x) {
+static uint8_t pixel_on(uint8_t y, uint8_t x) {
 	for (uint8_t i=0; i<2; i++) {
 		volatile struct paddle *p = &player[i];
 		if ( x == p->row && y >= p->pos && y < (p->pos + p->width)) {
@@ -111,8 +111,9 @@ inline uint8_t pixel_on(uint8_t y, uint8_t x) {
 	return 0;
 }
 
-volatile uint8_t active_col = 0;
-void inline draw_screen(void) {
+static volatile uint8_t active_col = 0;
+
+static void draw_screen(void) {
 	output_low(PORTD,COL_PIN[ (COLS+active_col-1)%COLS ]);
 	for (int x=0; x<ROWS; x++) {
 		if (pixel_on(active_col, x)) {
@@ -129,7 +130,7 @@ SIGNAL(SIG_TIMER1_COMPA) {
 	draw_screen();
 }
 
-inline int8_t aim(uint8_t x) {
+static int8_t aim(uint8_t x) {
 	int8_t dist_x = x - ball.xpos;
 	// how many ticks until it intersects?
 	int8_t t = dist_x/ball.dx;
@@ -147,11 +148,11 @@ inline int8_t aim(uint8_t x) {
 	return y;
 }
 
-inline uint8_t ball_lost(void) {
+static uint8_t ball_lost(void) {
 	return ((ball.xpos + ball.dx) < 0 || (ball.xpos + ball.dx) >= ROWS);
 }
 
-inline uint8_t bounce_ball(void) {
+static uint8_t bounce_ball(void) {
 	int8_t nx = ball.xpos + ball.dx;
 	int8_t ny = ball.ypos + ball.dy;
 	/* collision with upper/lower border */
@@ -174,20 +175,20 @@ inline uint8_t bounce_ball(void) {
 	return 0;
 }
 
-inline void move_ball(void) {
+static void move_ball(void) {
 	ball.xpos += ball.dx;
 	ball.ypos += ball.dy;
 }
 
-inline int8_t min(int8_t a, int8_t b) {
+static int8_t min(int8_t a, int8_t b) {
 	return a < b ? a : b;
 }
-inline int8_t max(int8_t a, int8_t b) {
+static int8_t max(int8_t a, int8_t b) {
 	return a > b ? a : b;
 }
 
 
-inline void move_paddles(void) {
+static void move_paddles(void) {
 	for (uint8_t i=0; i<2; i++) {
 		volatile struct paddle *p = &player[i];
 		if (!p->ai) {
@@ -222,7 +223,7 @@ inline void move_paddles(void) {
 	}
 }
 
-inline void move(void) {
+static void move(void) {
 	while (bounce_ball());
 	if (ball_lost()) {
 		_delay_ms(500);
