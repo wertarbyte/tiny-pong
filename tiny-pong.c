@@ -45,10 +45,11 @@ static volatile struct {
 	int8_t dy;
 } ball;
 
-static struct paddle {
+struct paddle {
 	const uint8_t row;
 	uint8_t pos;
-	uint8_t width;
+	uint8_t last_pos;
+	const uint8_t width;
 	uint8_t score;
 	uint8_t target;
 	uint8_t ai;
@@ -58,8 +59,8 @@ static struct paddle {
 static uint8_t serving = 0;
 
 static volatile struct paddle player[2] = {
-	{ 0, 0, 2, 0, 0, 1},
-	{ ROWS-1, 0, 2, 0, 0, 1},
+	{     0, MAX_Y/2, MAX_Y/2, 2, 0, MAX_Y/2, 1},
+	{ MAX_X, MAX_Y/2, MAX_Y/2, 2, 0, MAX_Y/2, 1},
 };
 
 static void start(void) {
@@ -81,8 +82,10 @@ static void init(void) {
 		set_output(DDRB, ROW_PIN[i]);
 		output_low(PORTB, ROW_PIN[i]);
 	}
+#ifdef MANUAL_CONTROL
 	set_input(DDRA, BTN_L);
 	set_input(DDRA, BTN_R);
+#endif
 	// seed random number generator
 	uint8_t seed = eeprom_read_byte(EEPROM_SEED_LOCATION);
 	srandom(seed);
@@ -169,15 +172,12 @@ static uint8_t bounce_ball(void) {
 			if ( ball.ypos > (p->pos + p->width-1) || ball.ypos < p->pos ) {
 				ball.dy *= -1;
 			}
+			/* transfer impulse from paddle to ball */
+			ball.dy += (p->pos - p->last_pos);
 			return 1;
 		}
 	}
 	return 0;
-}
-
-static void move_ball(void) {
-	ball.xpos += ball.dx;
-	ball.ypos += ball.dy;
 }
 
 static int8_t min(int8_t a, int8_t b) {
@@ -187,10 +187,11 @@ static int8_t max(int8_t a, int8_t b) {
 	return a > b ? a : b;
 }
 
-
 static void move_paddles(void) {
 	for (uint8_t i=0; i<2; i++) {
 		volatile struct paddle *p = &player[i];
+		p->last_pos = p->pos;
+#ifdef MANUAL_CONTROL
 		if (!p->ai) {
 			// manual movement
 			if (PINA & (1<<BTN_L)) {
@@ -201,15 +202,18 @@ static void move_paddles(void) {
 
 			continue;
 		}
+#endif
 		if (p->pos == p->target) {
 			/* select a new target */
 			int8_t dist = abs(ball.xpos - p->row);
-			if (dist < MAX_X-3) {
+			if (dist <= 2) {
 				int8_t target = aim(p->row);
 				if (target >= 0) {
+					/*
 					if (random()%2 == 0) {
 						target += ball.dy;
 					}
+					*/
 					p->target = max(0, min(MAX_Y+1 - p->width, target));
 				}
 			} else if(dist > MAX_X-2) {
@@ -223,21 +227,22 @@ static void move_paddles(void) {
 	}
 }
 
-static void move(void) {
+static void move_ball(void) {
 	while (bounce_ball());
 	if (ball_lost()) {
 		_delay_ms(500);
 		start();
 	} else {
-		move_ball();
+		ball.xpos += ball.dx;
+		ball.ypos += ball.dy;
 	}
 }
 
 int main(void) {
 	init();
 
-	uint8_t tick = 0;
 	while(1) {
+#ifdef MANUAL_CONTROL
 		// see if someone wants to take over a player
 		if (player[0].ai && player[1].ai) {
 			// manual movement
@@ -249,13 +254,10 @@ int main(void) {
 				player[1].ai = 0;
 			}
 		}
-		_delay_ms(50);
+#endif
+		_delay_ms(200);
+		move_ball();
 		move_paddles();
-		if (tick >= 5) {
-			move();
-			tick = 0;
-		}
-		tick++;
 	}
 	return 0;
 }
